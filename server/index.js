@@ -6,14 +6,22 @@ import customerRoutes from "./routes/customerRoutes.js";
 import driverRoutes from "./routes/driverRoutes.js";
 import ownerRoutes from "./routes/ownerRoutes.js";
 import dotenv from "dotenv";
+import cors from "cors"; // <-- import cors
 
 dotenv.config();
 
 const app = express();
 
-// Middleware
+// ===== Middleware =====
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ===== CORS setup =====
+app.use(cors({
+  origin: "http://localhost:3001", // your frontend URL
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true,
+}));
 
 // ===== Routes =====
 app.use("/api/admin", adminRoutes);
@@ -32,7 +40,7 @@ app.get("/", async (req, res) => {
 });
 
 // ===== Start server =====
-const PORT = 3000; // hardcoded port
+const PORT = 3000; // backend port
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
 });
