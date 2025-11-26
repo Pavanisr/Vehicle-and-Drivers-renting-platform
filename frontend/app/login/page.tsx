@@ -31,18 +31,21 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.message);
+        alert(data.message || "Login failed");
         setLoading(false);
         return;
       }
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("role", role);
-
-      router.push(`/${role}`); // redirect to dashboard/profile
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("role", role);
+        router.push(`/${role}`); // redirect after token saved
+      } else {
+        alert("Login failed: No token received");
+      }
     } catch (error) {
+      console.error("Login error:", error);
       alert("Something went wrong");
-      console.error(error);
     } finally {
       setLoading(false);
     }

@@ -49,7 +49,7 @@ router.post("/login", async (req, res) => {
 
     const token = jwt.sign(
       { id: customer.customer_id, role: "customer" },
-      "your_jwt_secret_key", // Replace with your secret or env variable
+       process.env.JWT_SECRET, // Replace with your secret or env variable
       { expiresIn: "7d" }
     );
 

@@ -1,282 +1,296 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import {
-  FaUser,
-  FaCar,
-  FaBell,
-  FaListAlt,
-  FaSignOutAlt,
-} from "react-icons/fa";
-import { AiOutlineClose } from "react-icons/ai";
+import { useRouter } from "next/navigation";
+import { FaBell, FaListAlt, FaCar, FaUser, FaSignOutAlt } from "react-icons/fa";
+import io from "socket.io-client";
+import "bootstrap/dist/css/bootstrap.min.css";
 
 interface Booking {
   booking_id: number;
   vehicle_model: string;
   vehicle_type: string;
-  driver_name: string;
+  driver_name: string | null;
   owner_name: string;
   pickup_time: string;
-  drop_time: string;
   status: string;
 }
 
 interface DashboardData {
   total_bookings: number;
   completed_bookings: number;
-  total_paid: number;
   upcoming_bookings: Booking[];
 }
 
+const socket = io("http://localhost:3000", { transports: ["websocket"] });
+
 const CustomerDashboard: React.FC = () => {
+  const router = useRouter();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [showProfilePopup, setShowProfilePopup] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
 
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  // Load token from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedToken = localStorage.getItem("token");
+      if (!savedToken) router.push("/login");
+      else setToken(savedToken);
+    }
+  }, [router]);
 
+  // Fetch profile and dashboard
   useEffect(() => {
     if (!token) return;
 
-    const fetchDashboard = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch(
-          `${
-            process.env.NEXT_PUBLIC_API_URL ||
-            "http://localhost:3000/api/customers"
-          }/dashboard`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        const data = await res.json();
-        setDashboard(data);
+        // Fetch Profile
+        const profileRes = await fetch("http://localhost:3000/api/customers/profile", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!profileRes.ok) throw new Error("Failed to authenticate token");
+        const profileData = await profileRes.json();
+        setProfile(profileData);
+
+        // Fetch Dashboard
+        const dashRes = await fetch("http://localhost:3000/api/customers/dashboard", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!dashRes.ok) throw new Error("Failed to fetch dashboard");
+        const dashData = await dashRes.json();
+
+        setDashboard({
+          total_bookings: Number(dashData.total_bookings ?? 0),
+          completed_bookings: Number(dashData.completed_bookings ?? 0),
+          upcoming_bookings: Array.isArray(dashData.upcoming_bookings)
+            ? dashData.upcoming_bookings.map((b: any) => ({
+                booking_id: b.booking_id,
+                vehicle_model: b.vehicle_model,
+                vehicle_type: b.vehicle_type,
+                driver_name: b.driver_name,
+                owner_name: b.owner_name,
+                pickup_time: b.pickup_time,
+                status: b.status,
+              }))
+            : [],
+        });
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching dashboard/profile:", err);
+        localStorage.removeItem("token");
+        router.push("/login");
       } finally {
         setLoading(false);
       }
     };
 
-    const fetchProfile = async () => {
-      try {
-        const res = await fetch(
-          `${
-            process.env.NEXT_PUBLIC_API_URL ||
-            "http://localhost:3000/api/customers"
-          }/profile`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        const data = await res.json();
-        setProfile(data);
-      } catch (err) {
-        console.error(err);
-      }
+    fetchData();
+  }, [token, router]);
+
+  // Socket notifications
+  useEffect(() => {
+    if (!profile?.customer_id) return;
+
+    socket.emit("joinRoom", profile.customer_id);
+
+    const handleBookingUpdate = (msg: any) => {
+      setNotifications((prev) => [msg, ...prev]);
+      console.log("🔔 New booking notification:", msg);
     };
 
-    fetchDashboard();
-    fetchProfile();
-  }, [token]);
+    socket.on("bookingUpdate", handleBookingUpdate);
 
-  const handleLogout = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
-    }
+    return () => {
+      socket.off("bookingUpdate", handleBookingUpdate);
+    };
+  }, [profile]);
+
+  const logout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    router.push("/login");
   };
 
   if (loading)
     return (
-      <div className="flex justify-center items-center h-screen text-blue-600 text-xl font-semibold">
-        Loading Dashboard...
+      <div className="d-flex justify-content-center align-items-center vh-100">
+        <h4 className="text-primary">Loading Dashboard...</h4>
       </div>
     );
 
   return (
-    <div className="flex min-h-screen bg-blue-50">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gradient-to-b from-blue-800 to-blue-600 text-white flex flex-col p-6 space-y-4 shadow-lg">
-        <div className="flex items-center space-x-3 mb-6 border-b border-blue-400 pb-4">
-          <FaUser className="text-3xl" />
-          <div>
-            <p className="font-semibold text-lg">
-              {profile?.full_name || "Customer"}
-            </p>
-            <p className="text-xs opacity-80">{profile?.email}</p>
+    <div className="d-flex">
+      {/* SIDEBAR */}
+      <div className="sidebar d-flex flex-column p-3">
+        <div className="text-center mb-4">
+          <div className="profile-pic d-flex justify-content-center align-items-center">
+            <FaUser size={35} />
           </div>
+          <h6 className="mt-2 fw-bold">{profile?.full_name}</h6>
+          <p className="small text-muted">{profile?.email}</p>
         </div>
 
-        <button
-          onClick={() => setShowProfilePopup(true)}
-          className="flex items-center gap-3 p-2 hover:bg-blue-500 rounded-lg transition"
-        >
-          <FaUser /> Profile
-        </button>
-
-        <button className="flex items-center gap-3 p-2 hover:bg-blue-500 rounded-lg transition">
-          <FaCar /> Book Now
-        </button>
-
-        <button className="flex items-center gap-3 p-2 hover:bg-blue-500 rounded-lg transition">
-          <FaBell /> Notifications
-        </button>
-
-        <button className="flex items-center gap-3 p-2 hover:bg-blue-500 rounded-lg transition">
-          <FaListAlt /> Bookings
-        </button>
-
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-3 p-2 hover:bg-red-500 rounded-lg transition mt-auto"
-        >
-          <FaSignOutAlt /> Logout
-        </button>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 p-8">
-        <h1 className="text-3xl font-bold text-blue-800 mb-6">Dashboard</h1>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {[
-            {
-              label: "Total Bookings",
-              value: dashboard?.total_bookings || 0,
-            },
-            {
-              label: "Completed Bookings",
-              value: dashboard?.completed_bookings || 0,
-            },
-            {
-              label: "Total Paid",
-              value: `$${dashboard?.total_paid || 0}`,
-            },
-          ].map((card, idx) => (
-            <div
-              key={idx}
-              className="bg-white shadow-md hover:shadow-xl transition rounded-xl p-6 text-center border-t-4 border-blue-600"
+        <ul className="nav nav-pills flex-column gap-2">
+          <li>
+            <button className="sidebar-btn">
+              <FaUser className="me-2" /> Profile
+            </button>
+          </li>
+          <li>
+            <button className="sidebar-btn">
+              <FaCar className="me-2" /> Book Now
+            </button>
+          </li>
+          <li>
+            <button
+              className="sidebar-btn position-relative"
+              onClick={() => setShowNotificationModal(true)}
             >
-              <h2 className="text-lg font-semibold text-blue-700">
-                {card.label}
-              </h2>
-              <p className="text-3xl mt-3 font-bold text-blue-900">
-                {card.value}
-              </p>
+              <FaBell className="me-2" /> Notifications
+              {notifications.length > 0 && (
+                <span className="notif-badge">{notifications.length}</span>
+              )}
+            </button>
+          </li>
+          <li>
+            <button className="sidebar-btn">
+              <FaListAlt className="me-2" /> Bookings
+            </button>
+          </li>
+          <li className="mt-auto">
+            <button className="logout-btn" onClick={logout}>
+              <FaSignOutAlt className="me-2" /> Logout
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      {/* MAIN CONTENT */}
+      <div className="p-4 w-100">
+        <h2 className="text-primary fw-bold mb-4">Dashboard</h2>
+
+        {/* CARDS */}
+        <div className="row mb-4">
+          {[
+            { title: "Total Bookings", value: dashboard?.total_bookings ?? 0 },
+            { title: "Completed", value: dashboard?.completed_bookings ?? 0 },
+          ].map((item, i) => (
+            <div className="col-md-6 mb-3" key={i}>
+              <div className="card shadow-sm">
+                <div className="card-body text-center">
+                  <h5 className="text-primary">{item.title}</h5>
+                  <h2>{item.value}</h2>
+                </div>
+              </div>
             </div>
           ))}
         </div>
 
-        {/* Upcoming Bookings */}
-        <div>
-          <h2 className="text-xl font-semibold text-blue-800 mb-4">
-            Upcoming Bookings
-          </h2>
-
-          {!dashboard?.upcoming_bookings ||
-          dashboard.upcoming_bookings.length === 0 ? (
-            <p className="text-gray-600 bg-white p-4 rounded shadow">
-              No upcoming bookings.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {dashboard.upcoming_bookings.map((b) => (
-                <div
-                  key={b.booking_id}
-                  className="bg-white p-5 rounded-xl shadow hover:shadow-lg transition border-l-4 border-blue-600"
-                >
-                  <h3 className="font-bold text-blue-700 text-lg">
-                    {b.vehicle_model} ({b.vehicle_type})
-                  </h3>
-
-                  <div className="text-sm mt-2 space-y-1 text-gray-700">
-                    <p>
-                      <strong>Driver:</strong> {b.driver_name}
-                    </p>
-                    <p>
-                      <strong>Owner:</strong> {b.owner_name}
-                    </p>
-                    <p>
-                      <strong>Pickup:</strong>{" "}
-                      {new Date(b.pickup_time).toLocaleString()}
-                    </p>
-                    <p>
-                      <strong>Drop:</strong>{" "}
-                      {new Date(b.drop_time).toLocaleString()}
-                    </p>
-                    <p>
-                      <strong>Status:</strong>{" "}
-                      <span className="font-semibold text-blue-700">
-                        {b.status}
-                      </span>
-                    </p>
-                  </div>
+        {/* BOOKING LIST */}
+        <h4 className="text-primary mb-3">My Bookings</h4>
+        <div className="row">
+          {dashboard?.upcoming_bookings.map((b) => (
+            <div className="col-md-6 mb-3" key={b.booking_id}>
+              <div className="card shadow-sm border-primary">
+                <div className="card-body">
+                  <h5>{b.vehicle_model} ({b.vehicle_type})</h5>
+                  <p><strong>Driver:</strong> {b.driver_name ?? "No Driver Assigned"}</p>
+                  <p><strong>Owner:</strong> {b.owner_name}</p>
+                  <p><strong>Pickup:</strong> {new Date(b.pickup_time).toLocaleString()}</p>
+                  <p><strong>Status:</strong> <span className="text-primary fw-bold">{b.status}</span></p>
                 </div>
-              ))}
+              </div>
             </div>
-          )}
+          ))}
         </div>
-      </main>
+      </div>
 
-      {/* Profile Popup */}
-      {showProfilePopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50 animate-fadeIn">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-96 relative animate-scaleIn">
-            <button
-              onClick={() => setShowProfilePopup(false)}
-              className="absolute top-3 right-3 text-blue-800"
-            >
-              <AiOutlineClose size={24} />
-            </button>
-
-            <h2 className="text-2xl font-bold text-blue-800 mb-4">
-              Profile Details
-            </h2>
-
-            <div className="space-y-2 text-gray-700">
-              <p>
-                <strong>Name:</strong> {profile?.full_name}
-              </p>
-              <p>
-                <strong>Email:</strong> {profile?.email}
-              </p>
-              <p>
-                <strong>Phone:</strong> {profile?.phone}
-              </p>
+      {/* NOTIFICATION MODAL */}
+      {showNotificationModal && (
+        <div className="modal show fade d-block modal-backdrop-custom">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-primary text-white">
+                <h5 className="modal-title">Notifications</h5>
+                <button
+                  className="btn-close btn-close-white"
+                  onClick={() => setShowNotificationModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                {notifications.length === 0 ? (
+                  <p>No new notifications.</p>
+                ) : (
+                  notifications.map((n, i) => (
+                    <div key={i} className="alert alert-info">{n.message}</div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Mobile Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-blue-700 text-white flex justify-around p-3 md:hidden shadow-lg">
-        <button
-          onClick={() => setShowProfilePopup(true)}
-          className="flex flex-col items-center"
-        >
-          <FaUser size={20} />
-          <span className="text-xs">Profile</span>
-        </button>
-
-        <button className="flex flex-col items-center">
-          <FaCar size={20} />
-          <span className="text-xs">Book Now</span>
-        </button>
-
-        <button className="flex flex-col items-center">
-          <FaBell size={20} />
-          <span className="text-xs">Alerts</span>
-        </button>
-
-        <button className="flex flex-col items-center">
-          <FaListAlt size={20} />
-          <span className="text-xs">Bookings</span>
-        </button>
-      </nav>
+      {/* STYLES */}
+      <style jsx>{`
+        .sidebar {
+          width: 260px;
+          min-height: 100vh;
+          background: #ffffff;
+          border-right: 1px solid #e6e6e6;
+        }
+        .profile-pic {
+          width: 70px;
+          height: 70px;
+          margin: 0 auto;
+          border-radius: 50%;
+          background: #2d6cdf;
+          color: white;
+        }
+        .sidebar-btn {
+          width: 100%;
+          background: #f6f8ff;
+          border: none;
+          padding: 12px 16px;
+          border-radius: 10px;
+          font-weight: 500;
+          color: #2b3a67;
+          text-align: left;
+          transition: 0.2s;
+        }
+        .sidebar-btn:hover {
+          background: #e3e9ff;
+          color: #1a2d6d;
+        }
+        .logout-btn {
+          width: 100%;
+          background: #ff4d4d;
+          border: none;
+          padding: 12px 16px;
+          border-radius: 10px;
+          color: white;
+          font-weight: 500;
+        }
+        .logout-btn:hover {
+          background: #e63d3d;
+        }
+        .notif-badge {
+          background: #ff3b3b;
+          color: white;
+          font-size: 11px;
+          padding: 3px 8px;
+          border-radius: 50px;
+          position: absolute;
+          right: 10px;
+          top: 8px;
+        }
+        .modal-backdrop-custom {
+          background: rgba(0, 0, 0, 0.5);
+        }
+      `}</style>
     </div>
   );
 };
