@@ -1,8 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const Navbar: React.FC = () => {
+  const router = useRouter();
+  const [showSignupDropdown, setShowSignupDropdown] = useState(false);
+
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -23,12 +27,9 @@ const Navbar: React.FC = () => {
         .navbar {
           width: 88%;
           padding: 14px 35px;
-
           display: flex;
           align-items: center;
           justify-content: space-between;
-
-          /* ⭐ Enhanced Glass Effect */
           background: rgba(255, 251, 251, 0.49);
           box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25);
           backdrop-filter: blur(18px);
@@ -64,6 +65,7 @@ const Navbar: React.FC = () => {
         .auth-btns {
           display: flex;
           gap: 12px;
+          position: relative;
         }
 
         .signin-btn {
@@ -73,6 +75,7 @@ const Navbar: React.FC = () => {
           border: none;
           color: white;
           backdrop-filter: blur(10px);
+          cursor: pointer;
         }
 
         .signup-btn {
@@ -81,6 +84,36 @@ const Navbar: React.FC = () => {
           border-radius: 30px;
           border: none;
           color: white;
+          cursor: pointer;
+          position: relative;
+        }
+
+        .signup-dropdown {
+          position: absolute;
+          top: 50px;
+          right: 0;
+          background: #fff;
+          color: #2b3a67;
+          border-radius: 12px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          display: flex;
+          flex-direction: column;
+          min-width: 160px;
+          overflow: hidden;
+          z-index: 10;
+        }
+
+        .signup-dropdown button {
+          padding: 12px 18px;
+          background: none;
+          border: none;
+          text-align: left;
+          cursor: pointer;
+          transition: 0.2s;
+        }
+
+        .signup-dropdown button:hover {
+          background: #f0f4ff;
         }
       `}</style>
 
@@ -101,8 +134,26 @@ const Navbar: React.FC = () => {
           </div>
 
           <div className="auth-btns">
-            <button className="signin-btn">Sign In</button>
-            <button className="signup-btn">Sign Up</button>
+            <button className="signin-btn" onClick={() => router.push("/login")}>
+              Sign In
+            </button>
+
+            <div>
+              <button
+                className="signup-btn"
+                onClick={() => setShowSignupDropdown(!showSignupDropdown)}
+              >
+                Sign Up
+              </button>
+
+              {showSignupDropdown && (
+                <div className="signup-dropdown">
+                  <button onClick={() => router.push("/ownerReg")}>As Owner</button>
+                  <button onClick={() => router.push("/driverReg")}>As Driver</button>
+                  <button onClick={() => router.push("/customerReg")}>As Customer</button>
+                </div>
+              )}
+            </div>
           </div>
         </nav>
       </div>

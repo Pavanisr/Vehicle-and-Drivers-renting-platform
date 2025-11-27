@@ -2,8 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FaBell, FaListAlt, FaCar, FaUser, FaSignOutAlt } from "react-icons/fa";
-import io from "socket.io-client";
+import { FaCar, FaUser, FaSignOutAlt } from "react-icons/fa";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 interface Booking {
@@ -22,16 +21,11 @@ interface DashboardData {
   upcoming_bookings: Booking[];
 }
 
-const socket = io("http://localhost:3000", { transports: ["websocket"] });
-
 const CustomerDashboard: React.FC = () => {
   const router = useRouter();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [showNotificationModal, setShowNotificationModal] = useState(false);
-  const [showBookModal, setShowBookModal] = useState(false);
   const [token, setToken] = useState<string | null>(null);
 
   // Filters & booking state
@@ -45,9 +39,8 @@ const CustomerDashboard: React.FC = () => {
     passengers: "",
     luggage: "",
     fuel_type: "",
-    price_min: "",
-    price_max: "",
   });
+
   const [pickupTime, setPickupTime] = useState("");
   const [dropTime, setDropTime] = useState("");
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -109,29 +102,9 @@ const CustomerDashboard: React.FC = () => {
     fetchData();
   }, [token, router]);
 
-  // Socket notifications
-  useEffect(() => {
-    if (!profile?.customer_id) return;
-
-    socket.emit("joinRoom", profile.customer_id);
-
-    const handleBookingUpdate = (msg: any) => {
-      setNotifications((prev) => [msg, ...prev]);
-      console.log("🔔 New booking notification:", msg);
-    };
-
-    socket.on("bookingUpdate", handleBookingUpdate);
-
-    return () => {
-      socket.off("bookingUpdate", handleBookingUpdate);
-    };
-  }, [profile]);
-
   // Handle Book Now modal
-  const openBookModal = () => {
-    setShowBookModal(true);
-  };
-
+  const [showBookModal, setShowBookModal] = useState(false);
+  const openBookModal = () => setShowBookModal(true);
   const closeBookModal = () => {
     setShowBookModal(false);
     setVehicles([]);
@@ -139,17 +112,20 @@ const CustomerDashboard: React.FC = () => {
     setPriceEstimate(null);
   };
 
-  // Fetch vehicles based on filters
+  // SEARCH VEHICLES
   const handleSearch = async () => {
+    if (!token) return alert("Token missing, please login again.");
     try {
       const query = new URLSearchParams(filters as any).toString();
       const res = await fetch(`http://localhost:3000/api/customers/search?${query}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      setVehicles(data);
+      if (Array.isArray(data)) setVehicles(data);
+      else setVehicles([]);
     } catch (error) {
       console.error("Error fetching vehicles:", error);
+      alert("Error fetching vehicles. Check console.");
     }
   };
 
@@ -176,7 +152,7 @@ const CustomerDashboard: React.FC = () => {
           price_estimate: selectedVehicle.price_per_km,
         }),
       });
-      const data = await res.json();
+      await res.json();
       alert("Booking requested successfully!");
       closeBookModal();
     } catch (error) {
@@ -187,7 +163,6 @@ const CustomerDashboard: React.FC = () => {
 
   const logout = () => {
     localStorage.removeItem("token");
-    localStorage.removeItem("role");
     router.push("/login");
   };
 
@@ -216,24 +191,9 @@ const CustomerDashboard: React.FC = () => {
               <FaUser className="me-2" /> Profile
             </button>
           </li>
-
           <li>
             <button className="sidebar-btn" onClick={openBookModal}>
               <FaCar className="me-2" /> Book Now
-            </button>
-          </li>
-          <li>
-            <button
-              className="sidebar-btn position-relative"
-              onClick={() => setShowNotificationModal(true)}
-            >
-              <FaBell className="me-2" /> Notifications
-              {notifications.length > 0 && <span className="notif-badge">{notifications.length}</span>}
-            </button>
-          </li>
-          <li>
-            <button className="sidebar-btn">
-              <FaListAlt className="me-2" /> Bookings
             </button>
           </li>
           <li className="mt-auto">
@@ -286,6 +246,10 @@ const CustomerDashboard: React.FC = () => {
                   <p>
                     <strong>Status:</strong> <span className="text-primary fw-bold">{b.status}</span>
                   </p>
+                  <div className="d-flex gap-2 mt-2">
+                    <button className="btn btn-outline-primary btn-sm">Rating</button>
+                    <button className="btn btn-outline-secondary btn-sm">Review</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -380,24 +344,6 @@ const CustomerDashboard: React.FC = () => {
                   </div>
                   <div className="col-md-6">
                     <input
-                      type="number"
-                      className="form-control"
-                      placeholder="Price Min"
-                      value={filters.price_min}
-                      onChange={(e) => setFilters({ ...filters, price_min: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-md-6">
-                    <input
-                      type="number"
-                      className="form-control"
-                      placeholder="Price Max"
-                      value={filters.price_max}
-                      onChange={(e) => setFilters({ ...filters, price_max: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-md-6">
-                    <input
                       type="text"
                       className="form-control"
                       placeholder="Fuel Type"
@@ -418,7 +364,14 @@ const CustomerDashboard: React.FC = () => {
                   <div className="mt-3">
                     <h6>Select Vehicle:</h6>
                     {vehicles.map((v) => (
-                      <div key={v.vehicle_id} className="card mb-2 p-2" onClick={() => { setSelectedVehicle(v); setPriceEstimate(v.price_per_km); }}>
+                      <div
+                        key={v.vehicle_id}
+                        className={`card mb-2 p-2 ${selectedVehicle?.vehicle_id === v.vehicle_id ? "border border-success" : ""}`}
+                        onClick={() => {
+                          setSelectedVehicle(v);
+                          setPriceEstimate(v.price_per_km);
+                        }}
+                      >
                         <p>
                           {v.model} ({v.vehicle_type}) - Owner: {v.owner_name} - Driver: {v.driver_name ?? "No Driver"}
                         </p>
@@ -440,31 +393,6 @@ const CustomerDashboard: React.FC = () => {
                       Submit Booking
                     </button>
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* NOTIFICATION MODAL */}
-      {showNotificationModal && (
-        <div className="modal show fade d-block modal-backdrop-custom">
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header bg-primary text-white">
-                <h5 className="modal-title">Notifications</h5>
-                <button className="btn-close btn-close-white" onClick={() => setShowNotificationModal(false)}></button>
-              </div>
-              <div className="modal-body">
-                {notifications.length === 0 ? (
-                  <p>No new notifications.</p>
-                ) : (
-                  notifications.map((n, i) => (
-                    <div key={i} className="alert alert-info">
-                      {n.message}
-                    </div>
-                  ))
                 )}
               </div>
             </div>
@@ -515,20 +443,12 @@ const CustomerDashboard: React.FC = () => {
         .logout-btn:hover {
           background: #e63d3d;
         }
-        .notif-badge {
-          background: #ff3b3b;
-          color: white;
-          font-size: 11px;
-          padding: 3px 8px;
-          border-radius: 50px;
-          position: absolute;
-          right: 10px;
-          top: 8px;
+        .blurred {
+          filter: blur(3px);
         }
         .modal-backdrop-custom {
           background: rgba(0, 0, 0, 0.5);
         }
-       
       `}</style>
     </div>
   );

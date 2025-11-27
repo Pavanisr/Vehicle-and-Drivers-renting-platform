@@ -93,53 +93,32 @@ router.put("/profile", verifyToken, async (req, res) => {
 });
 
 /* ======================================================
-   Search Vehicles & Drivers (Advanced Filters + Ratings)
+   Search Vehicles (vehicle_type, fuel_type, with_driver)
 ====================================================== */
 router.get("/search", verifyToken, async (req, res) => {
   try {
-    const {
-      vehicle_type,
-      with_driver,
-      pickup_location,
-      drop_location,
-      trip_type,
-      vehicle_model,
-      passengers,
-      luggage,
-      price_min,
-      price_max,
-      fuel_type
-    } = req.query;
+    const { vehicle_type, fuel_type, with_driver } = req.query;
 
     let query = `
       SELECT 
         v.*,
         o.full_name AS owner_name,
         d.full_name AS driver_name,
-
-        /* ========= DRIVER RATINGS ========= */
         AVG(dr.rating) AS driver_rating_avg,
         COUNT(dr.rating) AS driver_rating_count,
-
-        /* ========= VEHICLE RATINGS ========= */
         AVG(vr.rating) AS vehicle_rating_avg,
         COUNT(vr.rating) AS vehicle_rating_count,
-
-        /* ========= OWNER RATINGS ========= */
         AVG(orate.rating) AS owner_rating_avg,
         COUNT(orate.rating) AS owner_rating_count
-
       FROM vehicles v
       LEFT JOIN owners o ON v.owner_id = o.owner_id
       LEFT JOIN drivers d ON v.driver_id = d.driver_id
-
-      /* join rating table 3 times for driver/vehicle/owner */
       LEFT JOIN ratings dr ON dr.driver_id = d.driver_id
       LEFT JOIN ratings vr ON vr.vehicle_id = v.vehicle_id
       LEFT JOIN ratings orate ON orate.owner_id = o.owner_id
-      
       WHERE 1=1
     `;
+
     const params = [];
     let idx = 1;
 
@@ -147,59 +126,16 @@ router.get("/search", verifyToken, async (req, res) => {
       query += ` AND v.vehicle_type=$${idx++}`;
       params.push(vehicle_type);
     }
-    if (vehicle_model) {
-      query += ` AND v.model=$${idx++}`;
-      params.push(vehicle_model);
-    }
-    if (with_driver !== undefined) {
-      query += with_driver === "true" ? " AND v.driver_id IS NOT NULL" : " AND v.driver_id IS NULL";
-    }
-    if (passengers) {
-      query += ` AND v.passenger_capacity >= $${idx++}`;
-      params.push(passengers);
-    }
-    if (luggage) {
-      query += ` AND v.luggage_capacity >= $${idx++}`;
-      params.push(luggage);
-    }
-    if (fuel_type) {
-      query += ` AND v.fuel_type=$${idx++}`;
-      params.push(fuel_type);
-    }
-    if (price_min) {
-      query += ` AND v.price_per_km >= $${idx++}`;
-      params.push(price_min);
-    }
-    if (price_max) {
-      query += ` AND v.price_per_km <= $${idx++}`;
-      params.push(price_max);
-    }
 
-    // Optional: pickup/drop location & trip type filter
-    if (pickup_location) {
-      query += ` AND v.vehicle_id IN (
-        SELECT vehicle_id FROM bookings WHERE pickup_location=$${idx++} AND status='requested'
-      )`;
-      params.push(pickup_location);
-    }
-    if (drop_location) {
-      query += ` AND v.vehicle_id IN (
-        SELECT vehicle_id FROM bookings WHERE drop_location=$${idx++} AND status='requested'
-      )`;
-      params.push(drop_location);
-    }
-    if (trip_type) {
-      query += ` AND v.vehicle_id IN (
-        SELECT vehicle_id FROM bookings WHERE trip_type=$${idx++} AND status='requested'
-      )`;
-      params.push(trip_type);
+   
+
+    if (with_driver !== undefined) {
+      if (with_driver === "true") query += " AND v.driver_id IS NOT NULL";
+      else if (with_driver === "false") query += " AND v.driver_id IS NULL";
     }
 
     query += `
-      GROUP BY 
-        v.vehicle_id, 
-        o.owner_id, 
-        d.driver_id
+      GROUP BY v.vehicle_id, o.owner_id, d.driver_id
       ORDER BY v.created_at DESC
     `;
 
