@@ -443,9 +443,7 @@ const CustomerDashboard: React.FC = () => {
         .logout-btn:hover {
           background: #e63d3d;
         }
-        .blurred {
-          filter: blur(3px);
-        }
+        
         .modal-backdrop-custom {
           background: rgba(0, 0, 0, 0.5);
         }
