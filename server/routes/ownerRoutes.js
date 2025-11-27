@@ -138,6 +138,27 @@ router.delete("/vehicle/:id", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Error deleting vehicle", error: error.message });
   }
 });
+/* ======================================================
+   Get All Vehicles for Owner
+====================================================== */
+router.get("/vehicles", verifyToken, async (req, res) => {
+  try {
+    const ownerId = req.user.id;
+
+    const result = await pool.query(
+      `SELECT v.*, d.full_name AS driver_name 
+       FROM vehicles v
+       LEFT JOIN drivers d ON v.driver_id = d.driver_id
+       WHERE v.owner_id = $1
+       ORDER BY v.created_at DESC`,
+      [ownerId]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching vehicles", error: error.message });
+  }
+});
 
 /* ======================================================
    View Bookings for Owner Vehicles

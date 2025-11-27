@@ -186,6 +186,29 @@ router.delete("/vehicle/:id", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Error deleting vehicle", error: error.message });
   }
 });
+/* ======================================================
+   GET ALL VEHICLES FOR DRIVER
+====================================================== */
+router.get("/vehicles", verifyToken, async (req, res) => {
+  try {
+    const driverId = req.user.id;
+
+    const result = await pool.query(
+      `SELECT vehicle_id, owner_id, vehicle_type, model, 
+              capacity_passengers, capacity_luggage, fuel_type, 
+              license_plate, price_per_km, price_per_hour, 
+              status, image_url, created_at, updated_at
+       FROM vehicles
+       WHERE driver_id=$1
+       ORDER BY created_at DESC`,
+      [driverId]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching vehicles", error: error.message });
+  }
+});
 
 /* ======================================================
    DRIVER – ALL BOOKING REQUESTS
