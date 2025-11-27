@@ -4,20 +4,23 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 
 export default function CustomerProfile() {
-  const [profile, setProfile] = useState({ full_name: "", email: "", phone: "" });
+  const [profile, setProfile] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+  });
+
   const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [editMode, setEditMode] = useState(false);
+  const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         const token = localStorage.getItem("token");
 
-        if (!token) {
-          throw new Error("No token found. Please log in.");
-        }
+        if (!token) throw new Error("No token found");
 
-        // Correctly send Authorization header
         const res = await axios.get("http://localhost:3000/api/customers/profile", {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -27,17 +30,8 @@ export default function CustomerProfile() {
           email: res.data.email,
           phone: res.data.phone,
         });
-      } catch (err: any) {
-        console.error("Profile fetch error:", err.response?.data || err.message || err);
-
-        if (err.response?.status === 401 || err.response?.status === 403) {
-          // token invalid/expired
-          localStorage.removeItem("token");
-          localStorage.removeItem("role");
-          window.location.href = "/login"; // redirect to login
-        }
-
-        setErrorMessage(err.response?.data?.message || "Failed to fetch profile.");
+      } catch (err) {
+        window.location.href = "/login";
       } finally {
         setLoading(false);
       }
@@ -46,72 +40,258 @@ export default function CustomerProfile() {
     fetchProfile();
   }, []);
 
-  // Loading UI
-  if (loading) return <p className="text-center mt-5">Loading profile...</p>;
-
-  // Error UI
-  if (errorMessage)
+  // ========================================
+  //      LOADING SKELETON
+  // ========================================
+  if (loading) {
     return (
-      <div className="container mt-5">
-        <div className="alert alert-danger text-center">{errorMessage}</div>
+      <div
+        className="container py-5"
+        style={{ backgroundColor: "#eef5ff", minHeight: "100vh" }}
+      >
+        <div className="row justify-content-center fade-in">
+          <div className="col-md-6">
+
+            <div className="text-center mb-4">
+              <div
+                className="placeholder rounded-circle"
+                style={{ width: "110px", height: "110px" }}
+              ></div>
+              <div className="placeholder col-6 mt-3 mx-auto"></div>
+            </div>
+
+            <div className="card p-4 shadow-sm">
+              <div className="placeholder-glow">
+                <p className="placeholder col-12 mb-3"></p>
+                <p className="placeholder col-12 mb-3"></p>
+                <p className="placeholder col-12 mb-3"></p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <style jsx>{`
+          .fade-in {
+            animation: fadeIn 0.6s ease-in;
+          }
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
       </div>
     );
+  }
 
-  // Profile form
+  // ========================================
+  //     READ MODE — TWO COLUMN LAYOUT
+  // ========================================
+  if (!editMode) {
+    return (
+      <div className="container py-5 fade-in" style={{ backgroundColor: "#eef5ff", minHeight: "100vh" }}>
+        
+        {/* Page Title */}
+        <div className="mb-4 d-flex align-items-center">
+  <button
+    className="btn btn-outline-primary me-3"
+    onClick={() => window.location.href = "/customer"}
+  >
+    ← Back
+  </button>
+
+  <div className="text-center w-100">
+    <h2 className="fw-bold text-primary">My Profile</h2>
+    <p className="text-secondary">Manage your account information</p>
+  </div>
+</div>
+
+
+        <div className="row justify-content-center g-4">
+
+          {/* LEFT COLUMN — Avatar */}
+          <div className="col-md-4">
+            <div className="card shadow-lg border-0 text-center p-4">
+              <div
+                className="rounded-circle d-flex justify-content-center align-items-center mx-auto"
+                style={{
+                  width: "130px",
+                  height: "130px",
+                  backgroundColor: "#2d6cdf",
+                  color: "white",
+                  fontSize: "50px",
+                  fontWeight: "bold",
+                }}
+              >
+                {profile.full_name.charAt(0).toUpperCase()}
+              </div>
+
+              <h4 className="mt-3 fw-bold">{profile.full_name}</h4>
+              <p className="text-secondary">{profile.email}</p>
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN — Details */}
+          <div className="col-md-6">
+            <div className="card p-4 shadow-lg border-0">
+
+              <div className="mb-4">
+                <h6 className="text-primary fw-bold">Full Name</h6>
+                <p className="fw-semibold">{profile.full_name}</p>
+              </div>
+
+              <div className="mb-4">
+                <h6 className="text-primary fw-bold">Email</h6>
+                <p className="fw-semibold">{profile.email}</p>
+              </div>
+
+              <div className="mb-4">
+                <h6 className="text-primary fw-bold">Phone</h6>
+                <p className="fw-semibold">{profile.phone}</p>
+              </div>
+
+              <button
+                className="btn btn-primary btn-lg px-5"
+                onClick={() => setEditMode(true)}
+              >
+                Edit Profile
+              </button>
+
+            </div>
+          </div>
+        </div>
+
+        <style jsx>{`
+          .fade-in {
+            animation: fadeIn 0.6s ease-in;
+          }
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // ========================================
+  //     EDIT MODE + TOAST NOTIFICATION
+  // ========================================
   return (
-    <div className="container py-4" style={{ backgroundColor: "#f0f6ff", minHeight: "100vh" }}>
-      <h3 className="fw-bold text-primary mb-4">Account Settings</h3>
-      <div className="card shadow-sm border-0">
-        <div className="card-body p-4">
-          <div className="row g-3">
-            <div className="col-md-6">
-              <label className="form-label text-secondary">Full Name</label>
+    <div className="container py-5 fade-in" style={{ backgroundColor: "#eef5ff", minHeight: "100vh" }}>
+      
+      <div className="mb-4 d-flex align-items-center">
+  <button
+    className="btn btn-outline-primary me-3"
+    onClick={() => window.location.href = "/customer"}
+  >
+    ← Back
+  </button>
+
+  <div className="text-center w-100">
+    <h2 className="fw-bold text-primary">Edit Profile</h2>
+    <p className="text-secondary">Update your personal information</p>
+  </div>
+</div>
+
+
+      <div className="row justify-content-center">
+        <div className="col-md-7">
+
+          <div className="card shadow-lg border-0 p-4">
+
+            <div className="mb-3">
+              <label className="form-label fw-semibold">Full Name</label>
               <input
                 type="text"
-                className="form-control"
+                className="form-control form-control-lg"
                 value={profile.full_name}
                 onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
               />
             </div>
 
-            <div className="col-md-6">
-              <label className="form-label text-secondary">Email</label>
-              <input type="email" className="form-control" value={profile.email} disabled />
+            <div className="mb-3">
+              <label className="form-label fw-semibold">Email</label>
+              <input
+                type="email"
+                className="form-control form-control-lg"
+                value={profile.email}
+                disabled
+              />
             </div>
 
-            <div className="col-md-6">
-              <label className="form-label text-secondary">Phone Number</label>
+            <div className="mb-3">
+              <label className="form-label fw-semibold">Phone</label>
               <input
                 type="text"
-                className="form-control"
+                className="form-control form-control-lg"
                 value={profile.phone}
                 onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
               />
             </div>
-          </div>
 
-          <div className="mt-4">
-            <button
-              className="btn btn-primary px-4"
-              onClick={async () => {
-                try {
-                  const token = localStorage.getItem("token");
-                  await axios.put(
-                    "http://localhost:3000/api/customers/profile",
-                    profile,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                  );
-                  alert("Profile updated successfully!");
-                } catch (err: any) {
-                  alert(err.response?.data?.message || "Failed to update profile.");
-                }
-              }}
-            >
-              Save Changes
-            </button>
+            <div className="d-flex gap-3 mt-3">
+              <button
+                className="btn btn-primary btn-lg px-4"
+                onClick={async () => {
+                  try {
+                    const token = localStorage.getItem("token");
+
+                    await axios.put(
+                      "http://localhost:3000/api/customers/profile",
+                      profile,
+                      { headers: { Authorization: `Bearer ${token}` } }
+                    );
+
+                    setShowToast(true);
+                    setEditMode(false);
+
+                    setTimeout(() => setShowToast(false), 2500);
+
+                  } catch {
+                    alert("Failed to update profile");
+                  }
+                }}
+              >
+                Save Changes
+              </button>
+
+              <button
+                className="btn btn-outline-secondary btn-lg px-4"
+                onClick={() => setEditMode(false)}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* SUCCESS TOAST */}
+      {showToast && (
+        <div
+          className="toast show position-fixed top-0 end-0 m-4 text-bg-success"
+          role="alert"
+        >
+          <div className="toast-header bg-success text-white">
+            <strong className="me-auto">Success</strong>
+            <button type="button" className="btn-close btn-close-white"></button>
+          </div>
+          <div className="toast-body">
+            Profile updated successfully!
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .fade-in {
+          animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(15px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }

@@ -134,11 +134,15 @@ const CustomerDashboard: React.FC = () => {
         </div>
 
         <ul className="nav nav-pills flex-column gap-2">
-          <li>
-            <button className="sidebar-btn">
-              <FaUser className="me-2" /> Profile
-            </button>
-          </li>
+         <li>
+  <button
+    className="sidebar-btn"
+    onClick={() => router.push("/customerProf")}
+  >
+    <FaUser className="me-2" /> Profile
+  </button>
+</li>
+
           <li>
             <button className="sidebar-btn">
               <FaCar className="me-2" /> Book Now
