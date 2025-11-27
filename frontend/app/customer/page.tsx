@@ -31,7 +31,28 @@ const CustomerDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [showBookModal, setShowBookModal] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+
+  // Filters & booking state
+  const [filters, setFilters] = useState({
+    vehicle_type: "",
+    vehicle_model: "",
+    with_driver: "true",
+    pickup_location: "",
+    drop_location: "",
+    trip_type: "",
+    passengers: "",
+    luggage: "",
+    fuel_type: "",
+    price_min: "",
+    price_max: "",
+  });
+  const [pickupTime, setPickupTime] = useState("");
+  const [dropTime, setDropTime] = useState("");
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
+  const [priceEstimate, setPriceEstimate] = useState<number | null>(null);
 
   // Load token from localStorage
   useEffect(() => {
@@ -48,7 +69,6 @@ const CustomerDashboard: React.FC = () => {
 
     const fetchData = async () => {
       try {
-        // Fetch Profile
         const profileRes = await fetch("http://localhost:3000/api/customers/profile", {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -56,7 +76,6 @@ const CustomerDashboard: React.FC = () => {
         const profileData = await profileRes.json();
         setProfile(profileData);
 
-        // Fetch Dashboard
         const dashRes = await fetch("http://localhost:3000/api/customers/dashboard", {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -108,6 +127,64 @@ const CustomerDashboard: React.FC = () => {
     };
   }, [profile]);
 
+  // Handle Book Now modal
+  const openBookModal = () => {
+    setShowBookModal(true);
+  };
+
+  const closeBookModal = () => {
+    setShowBookModal(false);
+    setVehicles([]);
+    setSelectedVehicle(null);
+    setPriceEstimate(null);
+  };
+
+  // Fetch vehicles based on filters
+  const handleSearch = async () => {
+    try {
+      const query = new URLSearchParams(filters as any).toString();
+      const res = await fetch(`http://localhost:3000/api/customers/search?${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setVehicles(data);
+    } catch (error) {
+      console.error("Error fetching vehicles:", error);
+    }
+  };
+
+  // Confirm booking
+  const handleBook = async () => {
+    if (!selectedVehicle || !pickupTime || !dropTime) return alert("Please fill all fields");
+
+    try {
+      const res = await fetch("http://localhost:3000/api/customers/book", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          vehicle_id: selectedVehicle.vehicle_id,
+          driver_id: selectedVehicle.driver_id,
+          owner_id: selectedVehicle.owner_id,
+          pickup_location: filters.pickup_location,
+          drop_location: filters.drop_location,
+          pickup_time: pickupTime,
+          drop_time: dropTime,
+          trip_type: filters.trip_type,
+          price_estimate: selectedVehicle.price_per_km,
+        }),
+      });
+      const data = await res.json();
+      alert("Booking requested successfully!");
+      closeBookModal();
+    } catch (error) {
+      console.error("Error booking vehicle:", error);
+      alert("Failed to book vehicle");
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
@@ -122,7 +199,7 @@ const CustomerDashboard: React.FC = () => {
     );
 
   return (
-    <div className="d-flex">
+    <div className={`d-flex ${showBookModal ? "blurred" : ""}`}>
       {/* SIDEBAR */}
       <div className="sidebar d-flex flex-column p-3">
         <div className="text-center mb-4">
@@ -134,17 +211,14 @@ const CustomerDashboard: React.FC = () => {
         </div>
 
         <ul className="nav nav-pills flex-column gap-2">
-         <li>
-  <button
-    className="sidebar-btn"
-    onClick={() => router.push("/customerProf")}
-  >
-    <FaUser className="me-2" /> Profile
-  </button>
-</li>
+          <li>
+            <button className="sidebar-btn" onClick={() => router.push("/customerProf")}>
+              <FaUser className="me-2" /> Profile
+            </button>
+          </li>
 
           <li>
-            <button className="sidebar-btn">
+            <button className="sidebar-btn" onClick={openBookModal}>
               <FaCar className="me-2" /> Book Now
             </button>
           </li>
@@ -154,9 +228,7 @@ const CustomerDashboard: React.FC = () => {
               onClick={() => setShowNotificationModal(true)}
             >
               <FaBell className="me-2" /> Notifications
-              {notifications.length > 0 && (
-                <span className="notif-badge">{notifications.length}</span>
-              )}
+              {notifications.length > 0 && <span className="notif-badge">{notifications.length}</span>}
             </button>
           </li>
           <li>
@@ -178,19 +250,18 @@ const CustomerDashboard: React.FC = () => {
 
         {/* CARDS */}
         <div className="row mb-4">
-          {[
-            { title: "Total Bookings", value: dashboard?.total_bookings ?? 0 },
-            { title: "Completed", value: dashboard?.completed_bookings ?? 0 },
-          ].map((item, i) => (
-            <div className="col-md-6 mb-3" key={i}>
-              <div className="card shadow-sm">
-                <div className="card-body text-center">
-                  <h5 className="text-primary">{item.title}</h5>
-                  <h2>{item.value}</h2>
+          {[{ title: "Total Bookings", value: dashboard?.total_bookings ?? 0 }, { title: "Completed", value: dashboard?.completed_bookings ?? 0 }].map(
+            (item, i) => (
+              <div className="col-md-6 mb-3" key={i}>
+                <div className="card shadow-sm">
+                  <div className="card-body text-center">
+                    <h5 className="text-primary">{item.title}</h5>
+                    <h2>{item.value}</h2>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          )}
         </div>
 
         {/* BOOKING LIST */}
@@ -200,17 +271,181 @@ const CustomerDashboard: React.FC = () => {
             <div className="col-md-6 mb-3" key={b.booking_id}>
               <div className="card shadow-sm border-primary">
                 <div className="card-body">
-                  <h5>{b.vehicle_model} ({b.vehicle_type})</h5>
-                  <p><strong>Driver:</strong> {b.driver_name ?? "No Driver Assigned"}</p>
-                  <p><strong>Owner:</strong> {b.owner_name}</p>
-                  <p><strong>Pickup:</strong> {new Date(b.pickup_time).toLocaleString()}</p>
-                  <p><strong>Status:</strong> <span className="text-primary fw-bold">{b.status}</span></p>
+                  <h5>
+                    {b.vehicle_model} ({b.vehicle_type})
+                  </h5>
+                  <p>
+                    <strong>Driver:</strong> {b.driver_name ?? "No Driver Assigned"}
+                  </p>
+                  <p>
+                    <strong>Owner:</strong> {b.owner_name}
+                  </p>
+                  <p>
+                    <strong>Pickup:</strong> {new Date(b.pickup_time).toLocaleString()}
+                  </p>
+                  <p>
+                    <strong>Status:</strong> <span className="text-primary fw-bold">{b.status}</span>
+                  </p>
                 </div>
               </div>
             </div>
           ))}
         </div>
       </div>
+
+      {/* BOOK NOW MODAL */}
+      {showBookModal && (
+        <div className="modal show d-block modal-backdrop-custom">
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content">
+              <div className="modal-header bg-primary text-white">
+                <h5 className="modal-title">Book a Vehicle</h5>
+                <button className="btn-close btn-close-white" onClick={closeBookModal}></button>
+              </div>
+              <div className="modal-body">
+                {/* FILTERS */}
+                <div className="row g-2">
+                  <div className="col-md-6">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Vehicle Type"
+                      value={filters.vehicle_type}
+                      onChange={(e) => setFilters({ ...filters, vehicle_type: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Vehicle Model"
+                      value={filters.vehicle_model}
+                      onChange={(e) => setFilters({ ...filters, vehicle_model: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <select
+                      className="form-control"
+                      value={filters.with_driver}
+                      onChange={(e) => setFilters({ ...filters, with_driver: e.target.value })}
+                    >
+                      <option value="true">With Driver</option>
+                      <option value="false">Without Driver</option>
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Pickup Location"
+                      value={filters.pickup_location}
+                      onChange={(e) => setFilters({ ...filters, pickup_location: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Drop Location"
+                      value={filters.drop_location}
+                      onChange={(e) => setFilters({ ...filters, drop_location: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Trip Type"
+                      value={filters.trip_type}
+                      onChange={(e) => setFilters({ ...filters, trip_type: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="Passengers"
+                      value={filters.passengers}
+                      onChange={(e) => setFilters({ ...filters, passengers: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="Luggage Capacity"
+                      value={filters.luggage}
+                      onChange={(e) => setFilters({ ...filters, luggage: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="Price Min"
+                      value={filters.price_min}
+                      onChange={(e) => setFilters({ ...filters, price_min: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="Price Max"
+                      value={filters.price_max}
+                      onChange={(e) => setFilters({ ...filters, price_max: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Fuel Type"
+                      value={filters.fuel_type}
+                      onChange={(e) => setFilters({ ...filters, fuel_type: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 text-center">
+                  <button className="btn btn-primary" onClick={handleSearch}>
+                    Search Vehicles
+                  </button>
+                </div>
+
+                {/* VEHICLE LIST */}
+                {vehicles.length > 0 && (
+                  <div className="mt-3">
+                    <h6>Select Vehicle:</h6>
+                    {vehicles.map((v) => (
+                      <div key={v.vehicle_id} className="card mb-2 p-2" onClick={() => { setSelectedVehicle(v); setPriceEstimate(v.price_per_km); }}>
+                        <p>
+                          {v.model} ({v.vehicle_type}) - Owner: {v.owner_name} - Driver: {v.driver_name ?? "No Driver"}
+                        </p>
+                        <p>Price per KM: {v.price_per_km}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* PICKUP/DROP TIME & PRICE */}
+                {selectedVehicle && (
+                  <div className="mt-3">
+                    <label>Pickup Time</label>
+                    <input type="datetime-local" className="form-control mb-2" value={pickupTime} onChange={(e) => setPickupTime(e.target.value)} />
+                    <label>Drop Time</label>
+                    <input type="datetime-local" className="form-control mb-2" value={dropTime} onChange={(e) => setDropTime(e.target.value)} />
+                    <p>Price Estimate: {priceEstimate}</p>
+                    <button className="btn btn-success" onClick={handleBook}>
+                      Submit Booking
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* NOTIFICATION MODAL */}
       {showNotificationModal && (
@@ -219,17 +454,16 @@ const CustomerDashboard: React.FC = () => {
             <div className="modal-content">
               <div className="modal-header bg-primary text-white">
                 <h5 className="modal-title">Notifications</h5>
-                <button
-                  className="btn-close btn-close-white"
-                  onClick={() => setShowNotificationModal(false)}
-                ></button>
+                <button className="btn-close btn-close-white" onClick={() => setShowNotificationModal(false)}></button>
               </div>
               <div className="modal-body">
                 {notifications.length === 0 ? (
                   <p>No new notifications.</p>
                 ) : (
                   notifications.map((n, i) => (
-                    <div key={i} className="alert alert-info">{n.message}</div>
+                    <div key={i} className="alert alert-info">
+                      {n.message}
+                    </div>
                   ))
                 )}
               </div>
@@ -294,6 +528,7 @@ const CustomerDashboard: React.FC = () => {
         .modal-backdrop-custom {
           background: rgba(0, 0, 0, 0.5);
         }
+       
       `}</style>
     </div>
   );
